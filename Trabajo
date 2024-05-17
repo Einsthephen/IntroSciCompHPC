@@ -8,44 +8,45 @@ using namespace mfem;
 
 // Choice for the problem setup. The fluid velocity, initial condition and
 // inflow boundary condition are chosen based on this parameter.
-int problem;
+
+int problem; // Variable global. The value of this variable likely determines the specific functions used for velocity, initial condition, and inflow boundary condition.
 
 // Velocity coefficient
-void velocity_function(const Vector &x, Vector &v);
+void velocity_function(const Vector &x, Vector &v);  //Vector es una clase construida en esta librería. "x" es la posición y "v" la velocidad. 
 
 // Initial condition
-real_t u0_function(const Vector &x);
+real_t u0_function(const Vector &x);   
 
 // Inflow boundary condition
 real_t inflow_function(const Vector &x);
 
 // Mesh bounding box
-Vector bb_min, bb_max;
+Vector bb_min, bb_max;  // These likely represent the minimum and maximum bounds of the mesh domain, defining a bounding box.
 
-class DG_Solver : public Solver
+class DG_Solver : public Solver  // Herencia de la clase Solver de MFEM
 {
 private:
-   SparseMatrix &M, &K, A;
-   GMRESSolver linear_solver;
-   BlockILU prec;
-   real_t dt;
+   SparseMatrix &M, &K, A; //Matriz masa, advencion y operaciones
+   GMRESSolver linear_solver; // Solucionador de sistemas lineales mediante Generalized Minimal Residual (GMRES)
+   BlockILU prec; //Precondicionador. Una especie de factorizacion LU de matrices
+   real_t dt; //Paso de avance
 public:
-   DG_Solver(SparseMatrix &M_, SparseMatrix &K_, const FiniteElementSpace &fes)
+   DG_Solver(SparseMatrix &M_, SparseMatrix &K_, const FiniteElementSpace &fes)  //Constructor de la clase
       : M(M_),
         K(K_),
         prec(fes.GetFE(0)->GetDof(),
-             BlockILU::Reordering::MINIMUM_DISCARDED_FILL),
+             BlockILU::Reordering::MINIMUM_DISCARDED_FILL), // prec se obtiene con la información de los grados de libertad. 
         dt(-1.0)
    {
-      linear_solver.iterative_mode = false;
-      linear_solver.SetRelTol(1e-9);
-      linear_solver.SetAbsTol(0.0);
-      linear_solver.SetMaxIter(100);
-      linear_solver.SetPrintLevel(0);
-      linear_solver.SetPreconditioner(prec);
+      linear_solver.iterative_mode = false; //This disables iterative mode for the GMRES solver
+      linear_solver.SetRelTol(1e-9); // This sets the relative tolerance
+      linear_solver.SetAbsTol(0.0); // This sets the absolute tolerance for the GMRES solver to 0.0.
+      linear_solver.SetMaxIter(100); // This sets the maximum number of iterations for the GMRES solver to 100.
+      linear_solver.SetPrintLevel(0); //This disables printing information from the GMRES solver during its solution process
+      linear_solver.SetPreconditioner(prec); // This sets the preconditioner for the GMRES solver to the prec object 
    }
 
-   void SetTimeStep(real_t dt_)
+   void SetTimeStep(real_t dt_) //Esta función ajusta el tamaño del paso de avance
    {
       if (dt_ != dt)
       {
@@ -76,24 +77,24 @@ public:
     and advection matrices, and b describes the flow on the boundary. This can
     be written as a general ODE, du/dt = M^{-1} (K u + b), and this class is
     used to evaluate the right-hand side. */
-class FE_Evolution : public TimeDependentOperator
+class FE_Evolution : public TimeDependentOperator //Herencia de TimeDependentOperator de MFEM
 {
 private:
-   BilinearForm &M, &K;
+   BilinearForm &M, &K; //Objeto bilinear
    const Vector &b;
-   Solver *M_prec;
-   CGSolver M_solver;
-   DG_Solver *dg_solver;
+   Solver *M_prec; // It seems to be a solver specifically used for preconditioning the mass matrix 
+   CGSolver M_solver; // is a solver for linear systems of equations using the Conjugate Gradient (CG) method. This solver might be used specifically to solve for the unknown variable at the next time step.
+   DG_Solver *dg_solver; // This suggests the possibility of using the DG method within the FE_Evolution class
 
-   mutable Vector z;
+   mutable Vector z;  // he mutable keyword allows modifying this member variable even within a constant member function (like Mult). Es un vector en el que se almacena información de cálculos. 
 
 public:
    FE_Evolution(BilinearForm &M_, BilinearForm &K_, const Vector &b_);
 
-   virtual void Mult(const Vector &x, Vector &y) const;
-   virtual void ImplicitSolve(const real_t dt, const Vector &x, Vector &k);
+   virtual void Mult(const Vector &x, Vector &y) const; // This is a virtual function inherited from the TimeDependentOperator base class. Its purpose is likely to define the action of the time-dependent operator on a vector.
+   virtual void ImplicitSolve(const real_t dt, const Vector &x, Vector &k); //used to solve for the unknown variable at the next time step using an implicit time integration scheme. 
 
-   virtual ~FE_Evolution();
+   virtual ~FE_Evolution(); //This is the virtual destructor of the FE_Evolution class, likely used to perform any necessary cleanup
 };
 
 
@@ -115,11 +116,12 @@ int main(int argc, char *argv[])
    bool visit = false;
    bool paraview = false;
    bool binary = false;
-   int vis_steps = 5;
+   int vis_steps = 5; // Visualizes the solution every vis_steps time step
 
    int precision = 8;
    cout.precision(precision);
 
+   //En adelante hasta llegar al inciso "2" son simples confirmaciones internas para la impresión. 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
                   "Mesh file to use.");
@@ -206,7 +208,7 @@ int main(int argc, char *argv[])
    // 4. Refine the mesh to increase the resolution. In this example we do
    //    'ref_levels' of uniform refinement, where 'ref_levels' is a
    //    command-line parameter. If the mesh is of NURBS type, we convert it to
-   //    a (piecewise-polynomial) high-order mesh.
+   //    a (piecewise-polynomial) high-order mesh. The mesh is refined ref_levels times for a finer discretization.
    for (int lev = 0; lev < ref_levels; lev++)
    {
       mesh.UniformRefinement();
@@ -405,11 +407,12 @@ int main(int argc, char *argv[])
 
 
 // Implementation of class FE_Evolution
-FE_Evolution::FE_Evolution(BilinearForm &M_, BilinearForm &K_, const Vector &b_)
+FE_Evolution::FE_Evolution(BilinearForm &M_, BilinearForm &K_, const Vector &b_) // The constructor inherits from the TimeDependentOperator base class and initializes the size (M_.FESpace()->GetTrueVSize()) 
+//based on the finite element space of the provided M bilinear form.
    : TimeDependentOperator(M_.FESpace()->GetTrueVSize()),
      M(M_), K(K_), b(b_), z(height)
 {
-   Array<int> ess_tdof_list;
+   Array<int> ess_tdof_list; //An Array<int> ess_tdof_list is declared but not initialized (likely used later for essential boundary conditions).
    if (M.GetAssemblyLevel() == AssemblyLevel::LEGACY)
    {
       M_prec = new DSmoother(M.SpMat());
@@ -441,11 +444,12 @@ void FE_Evolution::Mult(const Vector &x, Vector &y) const
 void FE_Evolution::ImplicitSolve(const real_t dt, const Vector &x, Vector &k)
 {
    MFEM_VERIFY(dg_solver != NULL,
-               "Implicit time integration is not supported with partial assembly");
+               "Implicit time integration is not supported with partial assembly"); //This line verifies if the dg_solver member variable is not NULL. 
+//If it is NULL, it means the M bilinear form was assembled with a partial assembly level.
    K.Mult(x, z);
    z += b;
-   dg_solver->SetTimeStep(dt);
-   dg_solver->Mult(z, k);
+   dg_solver->SetTimeStep(dt); //Sets the time step dt for the DG solver.
+   dg_solver->Mult(z, k); //This calls the Mult function of the dg_solver object.
 }
 
 FE_Evolution::~FE_Evolution()
@@ -512,7 +516,8 @@ void velocity_function(const Vector &x, Vector &v)
 }
 
 // Initial condition
-real_t u0_function(const Vector &x)
+real_t u0_function(const Vector &x) //This code snippet defines the u0_function function, which calculates the initial condition for the PDE solution. 
+//It uses a similar approach as the velocity_function but defines a scalar field instead of a vector field.
 {
    int dim = x.Size();
 
